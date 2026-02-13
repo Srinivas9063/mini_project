@@ -521,6 +521,7 @@ public class AllInOneApp {
 
     static class SnakePanel extends JPanel implements ActionListener, KeyListener {
         static final int T = 20, W = 25, H = 25;
+
         java.util.List<Point> s = new ArrayList<>();
         Point food;
         int dx = T, dy = 0, score = 0;
@@ -552,7 +553,8 @@ public class AllInOneApp {
         void resetGame() {
             s.clear();
             s.add(new Point(10 * T, 10 * T));
-            dx = T; dy = 0;
+            dx = T;
+            dy = 0;
             score = 0;
             scoreL.setText("Score: 0");
             spawn();
@@ -569,29 +571,50 @@ public class AllInOneApp {
         }
 
         public void actionPerformed(ActionEvent e) {
-            Point h = new Point(s.get(0).x + dx, s.get(0).y + dy);
-            if (h.x < 0 || h.y < 0 || h.x >= W * T || h.y >= H * T || s.contains(h)) {
+            Point head = s.get(0);
+
+            int newX = head.x + dx;
+            int newY = head.y + dy;
+
+            // WRAP AROUND LOGIC
+            if (newX < 0) newX = (W - 1) * T;
+            if (newX >= W * T) newX = 0;
+
+            if (newY < 0) newY = (H - 1) * T;
+            if (newY >= H * T) newY = 0;
+
+            Point newHead = new Point(newX, newY);
+
+            // ONLY SELF COLLISION GAME OVER
+            if (s.contains(newHead)) {
                 t.stop();
                 errorBeep();
-                JOptionPane.showMessageDialog(this, "Game Over! Score: " + score);
+                JOptionPane.showMessageDialog(this, "Game Over! You hit yourself.\nScore: " + score);
                 restartBtn.setVisible(true);
                 return;
             }
-            s.add(0, h);
-            if (h.equals(food)) {
+
+            s.add(0, newHead);
+
+            if (newHead.equals(food)) {
                 score++;
                 successBeep();
                 spawn();
                 scoreL.setText("Score: " + score);
-            } else s.remove(s.size() - 1);
+            } else {
+                s.remove(s.size() - 1);
+            }
+
             repaint();
         }
 
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
+
             g.setColor(Color.GREEN);
             for (Point p : s) g.fillRoundRect(p.x, p.y, T, T, 5, 5);
+
             g.setColor(Color.RED);
             g.fillRoundRect(food.x, food.y, T, T, 5, 5);
         }
@@ -599,6 +622,7 @@ public class AllInOneApp {
         public void keyPressed(KeyEvent e) {
             if (!t.isRunning()) return;
             int k = e.getKeyCode();
+
             if (k == KeyEvent.VK_UP && dy == 0) { dx = 0; dy = -T; }
             if (k == KeyEvent.VK_DOWN && dy == 0) { dx = 0; dy = T; }
             if (k == KeyEvent.VK_LEFT && dx == 0) { dx = -T; dy = 0; }
@@ -746,104 +770,179 @@ public class AllInOneApp {
 
     /* ================= CAR RACER WITH RESTART BUTTON ================= */
     static class CarRacer extends JFrame {
-        CarRacer() {
-            setTitle("Car Racer");
-            setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-            add(new CarPanel());
-            pack();
-            setLocationRelativeTo(null);
+    CarRacer() {
+        setTitle("Car Racer");
+        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+        add(new CarPanel());
+        pack();
+        setLocationRelativeTo(null);
+    }
+}
+
+static class CarPanel extends JPanel implements ActionListener, KeyListener {
+
+    int carX = 175;
+    int carY;
+    int score = 0;
+
+    boolean flying = false;
+    long flyStartTime = 0;
+
+    ArrayList<Rectangle> obs = new ArrayList<>();
+    Timer t;
+    Random r = new Random();
+    JButton restartBtn;
+
+    int obstacleSpeed = 4;     // EASY SPEED
+    int spawnRate = 90;        // EASY SPAWN RATE (bigger = less obstacles)
+
+    CarPanel() {
+        setPreferredSize(new Dimension(400, 650));
+        setBackground(Color.DARK_GRAY);
+        setLayout(new BorderLayout());
+        setFocusable(true);
+        addKeyListener(this);
+
+        restartBtn = new JButton("Play Again");
+        restartBtn.setVisible(false);
+        restartBtn.addActionListener(e -> resetGame());
+        add(restartBtn, BorderLayout.SOUTH);
+
+        resetGame();
+    }
+
+    void resetGame() {
+        carX = 175;
+        score = 0;
+        obs.clear();
+
+        flying = false;
+
+        obstacleSpeed = 4;
+        spawnRate = 90;
+
+        if (t != null) t.stop();
+        t = new Timer(25, this);
+        t.start();
+
+        restartBtn.setVisible(false);
+        requestFocusInWindow();
+        repaint();
+    }
+
+    public void actionPerformed(ActionEvent e) {
+
+        score++;
+
+        // Speed increases slowly (easy mode)
+        if (score % 500 == 0 && obstacleSpeed < 10) obstacleSpeed++;
+
+        // spawn becomes slightly faster but still playable
+        if (score % 800 == 0 && spawnRate > 50) spawnRate -= 5;
+
+        spawn();
+
+        // move obstacles
+        for (Rectangle o : obs) o.y += obstacleSpeed;
+        obs.removeIf(o -> o.y > getHeight());
+
+        // Fly timing (fly for 600ms)
+        if (flying) {
+            if (System.currentTimeMillis() - flyStartTime > 1000) {
+                flying = false;
+            }
+        }
+
+        // Car Y position based on flying
+        carY = flying ? getHeight() - 260 : getHeight() - 140;
+
+        // Collision detection
+        Rectangle car = new Rectangle(carX, carY, 50, 100);
+
+        if (!flying) {
+    for (Rectangle o : obs) {
+        if (car.intersects(o)) {
+            t.stop();
+            errorBeep();
+            JOptionPane.showMessageDialog(this, "Crashed! Score: " + score);
+            restartBtn.setVisible(true);
+            return;
+        }
+    }
+}
+
+        repaint();
+    }
+
+    void spawn() {
+        // Easy spawn system
+        if (r.nextInt(spawnRate) < 5) {
+            int lane = r.nextInt(5);
+            int x = 50 + lane * 60;
+            obs.add(new Rectangle(x, -100, 50, 100));
         }
     }
 
-    static class CarPanel extends JPanel implements ActionListener, KeyListener {
-        int carX = 175, score = 0;
-        ArrayList<Rectangle> obs = new ArrayList<>();
-        Timer t;
-        Random r = new Random();
-        JButton restartBtn;
+    @Override
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
 
-        CarPanel() {
-            setPreferredSize(new Dimension(400, 650));
-            setBackground(Color.DARK_GRAY);
-            setLayout(new BorderLayout());
-            setFocusable(true);
-            addKeyListener(this);
+        // Road
+        g.setColor(Color.GRAY);
+        g.fillRect(50, 0, 300, getHeight());
 
-            restartBtn = new JButton("Play Again");
-            restartBtn.setVisible(false);
-            restartBtn.addActionListener(e -> resetGame());
-            add(restartBtn, BorderLayout.SOUTH);
-
-            resetGame();
+        // White lane line animation
+        g.setColor(Color.WHITE);
+        for (int i = 0; i < 12; i++) {
+            int y = (i * 80 + score * 2) % (getHeight() + 80) - 40;
+            g.fillRect(195, y, 10, 50);
         }
 
-        void resetGame() {
-            carX = 175;
-            score = 0;
-            obs.clear();
-            if (t != null) t.stop();
-            t = new Timer(25, this);
-            t.start();
-            restartBtn.setVisible(false);
-            requestFocusInWindow();
-            repaint();
+        // Car
+        carY = flying ? getHeight() - 260 : getHeight() - 140;
+
+        g.setColor(Color.BLUE);
+        g.fillRoundRect(carX, carY, 50, 100, 12, 12);
+
+        // If flying show wings effect
+        if (flying) {
+            g.setColor(Color.CYAN);
+            g.fillOval(carX - 15, carY + 30, 20, 40);
+            g.fillOval(carX + 45, carY + 30, 20, 40);
         }
 
-        public void actionPerformed(ActionEvent e) {
-            score++;
-            spawn();
-            for (Rectangle o : obs) o.y += 6;
-            obs.removeIf(o -> o.y > getHeight());
+        // Obstacles
+        g.setColor(Color.RED);
+        for (Rectangle o : obs) g.fillRoundRect(o.x, o.y, 50, 100, 12, 12);
 
-            Rectangle car = new Rectangle(carX, getHeight() - 140, 50, 100);
-            for (Rectangle o : obs) {
-                if (car.intersects(o)) {
-                    t.stop();
-                    errorBeep();
-                    JOptionPane.showMessageDialog(this, "Crashed! Score: " + score);
-                    restartBtn.setVisible(true);
-                    return;
-                }
-            }
-            repaint();
-        }
+        // Score
+        g.setColor(Color.WHITE);
+        g.setFont(new Font("Arial", Font.BOLD, 24));
+        g.drawString("Score: " + score, 20, 40);
 
-        void spawn() {
-            if (r.nextInt(70) < 6) {
-                int lane = r.nextInt(5);
-                int x = 50 + lane * 60;
-                obs.add(new Rectangle(x, -100, 50, 100));
-            }
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            g.setColor(Color.GRAY);
-            g.fillRect(50, 0, 300, getHeight());
-            g.setColor(Color.WHITE);
-            for (int i = 0; i < 12; i++) {
-                int y = (i * 80 + score * 5) % (getHeight() + 80) - 40;
-                g.fillRect(195, y, 10, 50);
-            }
-            g.setColor(Color.BLUE);
-            g.fillRoundRect(carX, getHeight() - 140, 50, 100, 12, 12);
-            g.setColor(Color.RED);
-            for (Rectangle o : obs) g.fillRoundRect(o.x, o.y, 50, 100, 12, 12);
-            g.setColor(Color.WHITE);
-            g.setFont(new Font("Arial", Font.BOLD, 24));
-            g.drawString("Score: " + score, 20, 40);
-        }
-
-        public void keyPressed(KeyEvent e) {
-            if (!t.isRunning()) return;
-            int k = e.getKeyCode();
-            if (k == KeyEvent.VK_LEFT && carX > 55) carX -= 60;
-            if (k == KeyEvent.VK_RIGHT && carX < 400 - 50 - 55) carX += 60;
-            repaint();
-        }
-
-        public void keyTyped(KeyEvent e) {}
-        public void keyReleased(KeyEvent e) {}
+        // Flying instruction
+        g.setFont(new Font("Arial", Font.PLAIN, 16));
+        g.drawString("Press SPACE to Fly", 20, 65);
     }
+
+    public void keyPressed(KeyEvent e) {
+        if (!t.isRunning()) return;
+        int k = e.getKeyCode();
+
+        if (k == KeyEvent.VK_LEFT && carX > 55) carX -= 60;
+        if (k == KeyEvent.VK_RIGHT && carX < 400 - 50 - 55) carX += 60;
+
+        // Fly Feature (SPACE)
+        if (k == KeyEvent.VK_SPACE && !flying) {
+            flying = true;
+            flyStartTime = System.currentTimeMillis();
+            successBeep();
+        }
+
+        repaint();
+    }
+
+    public void keyTyped(KeyEvent e) {}
+    public void keyReleased(KeyEvent e) {}
+}
 }
