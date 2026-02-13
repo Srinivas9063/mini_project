@@ -33,7 +33,7 @@ public class MainApp {
         center(GREEN+"2. Address book"+ RESET);
         center(GREEN+"3.  Food App"+RESET);
         center(GREEN + "0. Exit" + RESET);
-        System.out.println();
+        System.out.println(); 
 
         centerInline(YELLOW + "Select an option: " + RESET);
 

@@ -48,7 +48,7 @@ public class AllInOneApp {
             setTitle("All-In-One App");
             setSize(900, 600);
             setLocationRelativeTo(null);
-            setDefaultCloseOperation(EXIT_ON_CLOSE);
+            setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
             setLayout(new GridLayout(0, 4, 12, 12));
             getContentPane().setBackground(new Color(30, 30, 50));
 
